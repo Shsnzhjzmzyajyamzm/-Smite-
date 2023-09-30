@@ -1,0 +1,162 @@
+local player = game.Players.LocalPlayer
+local ChatService = game:GetService("Chat")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+
+local loopsmiteTargets = {}
+local godModeEnabled = false
+local killsmiteTracking = {}
+local allowedUsername = "jicky1098_92"
+
+function isValidTarget(targetPlayer)
+    return targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+end
+
+function handleChatMessage(playerName, message)
+    if string.sub(message, 1, 1) == ";" then
+        local args = string.sub(message, 2)
+        local command, rest = args:match("(%S+)%s+(.*)")
+        if not command then
+            command = args
+        end
+
+        if playerName == allowedUsername then
+            if command == "loopsmite" then
+                local targetPlayerName = rest
+                local targetPlayer = nil
+                
+                for _, player in pairs(game.Players:GetPlayers()) do
+                    if string.find(player.Name:lower(), targetPlayerName:lower()) then
+                        targetPlayer = player
+                        break
+                    end
+                end
+                
+                if isValidTarget(targetPlayer) then
+                    loopsmiteTargets[targetPlayer.Name] = true
+                    ChatService:Chat(player, "Loopsmite activated on " .. targetPlayer.Name)
+                else
+                    ChatService:Chat(player, "Player not found or does not have a HumanoidRootPart: " .. targetPlayerName)
+                end
+            elseif command == "unloopsmite" then
+                if not rest or rest == "" then
+                    for playerName, _ in pairs(loopsmiteTargets) do
+                        loopsmiteTargets[playerName] = nil
+                    end
+                    ChatService:Chat(player, "Unloopsmite deactivated for all targets.")
+                else
+                    local targetPlayerName = rest
+                    local targetPlayer = nil
+                    
+                    for _, player in pairs(game.Players:GetPlayers()) do
+                        if string.find(player.Name:lower(), targetPlayerName:lower()) then
+                            targetPlayer = player
+                            break
+                        end
+                    end
+                    
+                    if isValidTarget(targetPlayer) then
+                        loopsmiteTargets[targetPlayer.Name] = nil
+                        ChatService:Chat(player, "Unloopsmite deactivated on " .. targetPlayer.Name)
+                    else
+                        ChatService:Chat(player, "Player not found or does not have a HumanoidRootPart: " .. targetPlayerName)
+                    end
+                end
+            elseif command == "killsmite" then
+                local targetPlayerName = rest
+                local targetPlayer = nil
+                
+                for _, player in pairs(game.Players:GetPlayers()) do
+                    if string.find(player.Name:lower(), targetPlayerName:lower()) then
+                        targetPlayer = player
+                        break
+                    end
+                end
+                
+                local isSmiting = false
+                
+                local function killsmiteTarget()
+                    if isValidTarget(targetPlayer) and isSmiting then
+                        if targetPlayer.Character.Humanoid.Health <= 0 then
+                            isSmiting = false
+                            killsmiteTracking[targetPlayer.Name] = nil
+                            ChatService:Chat(player, "Killsmite deactivated on " .. targetPlayer.Name)
+                        else
+                            ReplicatedStorage.Events.createLightning:FireServer(targetPlayer.Character.HumanoidRootPart.Position)
+                            wait(0)
+                            killsmiteTarget()
+                        end
+                    else
+                        isSmiting = false
+                    end
+                end
+        
+                if isValidTarget(targetPlayer) and not isSmiting then
+                    isSmiting = true
+                    killsmiteTracking[targetPlayer.Name] = true
+                    killsmiteTarget()
+                    ChatService:Chat(player, "Killsmite activated on " .. targetPlayer.Name)
+                else
+                    ChatService:Chat(player, "Player not found or does not have a HumanoidRootPart: " .. targetPlayerName)
+                end
+            elseif command == "smite" then
+                local targetPlayerName, numStrikes = rest:match("(%S+)%s+(%d+)")
+                local targetPlayer = nil
+                
+                for _, player in pairs(game.Players:GetPlayers()) do
+                    if string.find(player.Name:lower(), targetPlayerName:lower()) then
+                        targetPlayer = player
+                        break
+                    end
+                end
+                
+                if targetPlayer and numStrikes then
+                    numStrikes = tonumber(numStrikes)
+                    if numStrikes > 0 then
+                        for i = 1, numStrikes do
+                            ReplicatedStorage.Events.createLightning:FireServer(targetPlayer.Character.HumanoidRootPart.Position)
+                        end
+                        ChatService:Chat(player, "Smite activated on " .. targetPlayer.Name .. " with " .. numStrikes .. " strikes.")
+                    else
+                        ChatService:Chat(player, "Number of strikes must be greater than 0.")
+                    end
+                else
+                    ChatService:Chat(player, "Invalid format. Use: ;smite TargetPlayer NumStrikes")
+                end
+            elseif command == "toggleGodMode" then
+                godModeEnabled = not godModeEnabled
+                if godModeEnabled then
+                    ChatService:Chat(player, "God mode enabled.")
+                else
+                    ChatService:Chat(player, "God mode disabled.")
+                end
+            else
+                ChatService:Chat(player, "Unknown command: " .. message)
+            end
+        end
+    end
+end
+
+player.Chatted:Connect(function(message)
+    handleChatMessage(player.Name, message)
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    if not gameProcessedEvent and input.KeyCode == Enum.KeyCode.C then
+        local message = godModeEnabled and ";toggleGodMode" or ";toggleGodMode"
+        handleChatMessage(player.Name, message)
+    end
+end)
+
+local function loopsmiteTargetsFunction()
+    while wait(0) do
+        for targetName, _ in pairs(loopsmiteTargets) do
+            local targetPlayer = game.Players:FindFirstChild(targetName)
+            if isValidTarget(targetPlayer) then
+                ReplicatedStorage.Events.createLightning:FireServer(targetPlayer.Character.HumanoidRootPart.Position)
+            end
+        end
+    end
+end
+
+coroutine.wrap(loopsmiteTargetsFunction)()
